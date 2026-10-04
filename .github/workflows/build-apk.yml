@@ -22,13 +22,21 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Dependencies & Sync
+      - name: Initialize Project & Build APK
         run: |
-          npm install
-          npx cap sync android
-
-      - name: Build Android APK
-        run: |
+          # Create default package.json
+          npm init -y
+          
+          # Install Capacitor core, CLI, and Android platform
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          
+          # Initialize Capacitor configuration pointing to your 'www' folder
+          npx cap init "RadarChat" "com.radar.chat" --web-dir www
+          
+          # Add the Android native platform template
+          npx cap add android
+          
+          # Build the APK via Gradle
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
