@@ -32,7 +32,7 @@
             <h1 class="text-lg font-bold tracking-widest text-green-400">RADAR_LINK // OFFLINE</h1>
         </div>
         <div id="status" class="text-xs text-green-600 bg-green-950/50 px-2 py-1 rounded border border-green-800">
-            SCANNING...
+            INITIALIZING...
         </div>
     </header>
 
@@ -58,7 +58,7 @@
             <div class="absolute w-3 h-3 bg-green-400 rounded-full shadow-[0_0_10px_#22c55e] z-10"></div>
             <div class="absolute w-6 h-6 rounded-full border border-green-400 pulse-ring pointer-events-none"></div>
 
-            <!-- Dynamic Nearby Nodes will be injected here via JavaScript -->
+            <!-- Dynamic Nearby Real Hardware Nodes Layer -->
             <div id="nodes-layer" class="absolute inset-0"></div>
         </div>
 
@@ -95,15 +95,56 @@
         </form>
     </div>
 
-    <script>
-        // Simulated nearby peer discovery nodes
-        const activePeers = [
-            { id: 'node_alpha', name: 'Alpha-Device', x: 60, y: 35, rssi: '-42 dBm' },
-            { id: 'node_beta', name: 'Delta-Phone', x: 30, y: 70, rssi: '-68 dBm' },
-            { id: 'node_gamma', name: 'Ghost-Node', x: 75, y: 65, rssi: '-55 dBm' }
-        ];
+    <!-- Bluetooth Hardware Radar Logic -->
+    <script type="module">
+        import { BleClient } from 'https://esm.run/@capacitor-community/bluetooth-le';
 
+        let activePeers = [];
         let currentPeer = null;
+
+        async function initBluetoothRadar() {
+            try {
+                document.getElementById('status').innerText = "INITIALIZING BT...";
+                await BleClient.initialize();
+                
+                const enabled = await BleClient.isEnabled();
+                if (!enabled) {
+                    document.getElementById('status').innerText = "ENABLE BLUETOOTH!";
+                    return;
+                }
+
+                document.getElementById('status').innerText = "SCANNING DEVICES...";
+
+                // Request live BLE scan for physical devices
+                await BleClient.requestLEScan({}, (result) => {
+                    const deviceId = result.device.deviceId;
+                    const name = result.device.name || 'Unknown Device';
+                    const rssi = result.rssi; // Signal strength (e.g., -40 to -90)
+
+                    // Map RSSI to radar coordinates
+                    const distanceFactor = Math.min(Math.max((rssi + 90) / 60, 0.1), 0.9);
+                    const angle = Math.random() * 2 * Math.PI; 
+                    const x = 50 + (distanceFactor * 40 * Math.cos(angle));
+                    const y = 50 + (distanceFactor * 40 * Math.sin(angle));
+
+                    const existing = activePeers.find(p => p.id === deviceId);
+                    if (existing) {
+                        existing.rssi = `${rssi} dBm`;
+                        existing.x = x;
+                        existing.y = y;
+                    } else {
+                        activePeers.push({ id: deviceId, name: name, x: x, y: y, rssi: `${rssi} dBm` });
+                    }
+
+                    renderRadarNodes();
+                    document.getElementById('status').innerText = `ONLINE (${activePeers.length} NODES)`;
+                });
+
+            } catch (e) {
+                console.error(e);
+                document.getElementById('status').innerText = "SCAN ERROR (PERMS)";
+            }
+        }
 
         function renderRadarNodes() {
             const layer = document.getElementById('nodes-layer');
@@ -115,72 +156,54 @@
                 node.style.left = `${peer.x}%`;
                 node.style.top = `${peer.y}%`;
                 
-                // Tooltip tag
                 node.innerHTML = `
                     <div class="absolute bottom-5 bg-black/80 border border-green-500/50 text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap text-green-300 pointer-events-none">
                         ${peer.name} (${peer.rssi})
                     </div>
                 `;
 
-                node.onclick = () => openChat(peer);
+                node.onclick = () => window.openChat(peer);
                 layer.appendChild(node);
             });
         }
 
-        function openChat(peer) {
+        // Global UI handlers for chat modal
+        window.openChat = function(peer) {
             currentPeer = peer;
             document.getElementById('chat-peer-name').innerText = `${peer.name} [${peer.rssi}]`;
-            
-            const messagesContainer = document.getElementById('chat-messages');
-            messagesContainer.innerHTML = `<div class="text-center text-xs text-green-700 my-2">— Connected to ${peer.name} —</div>`;
-            
+            document.getElementById('chat-messages').innerHTML = `<div class="text-center text-xs text-green-700 my-2">— Connected to ${peer.name} —</div>`;
             document.getElementById('chat-modal').classList.remove('translate-y-full');
-        }
+        };
 
-        function closeChat() {
+        window.closeChat = function() {
             document.getElementById('chat-modal').classList.add('translate-y-full');
             currentPeer = null;
-        }
+        };
 
-        function sendMessage(e) {
+        window.sendMessage = function(e) {
             e.preventDefault();
             const input = document.getElementById('message-input');
             const text = input.value.trim();
             if (!text) return;
 
             const messagesContainer = document.getElementById('chat-messages');
-            
-            // Append My Message
             messagesContainer.innerHTML += `
                 <div class="flex flex-col items-end">
                     <span class="text-[10px] text-green-600">YOU</span>
                     <div class="bg-green-950/60 border border-green-500/40 rounded p-2 max-w-[80%] text-green-300">${escapeHtml(text)}</div>
                 </div>
             `;
-            
             input.value = '';
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-            // Simulate incoming peer response after a short delay
-            setTimeout(() => {
-                messagesContainer.innerHTML += `
-                    <div class="flex flex-col items-start">
-                        <span class="text-[10px] text-green-600">${currentPeer ? currentPeer.name : 'PEER'}</span>
-                        <div class="bg-slate-900 border border-green-800 rounded p-2 max-w-[80%] text-green-400">ACK: Received transmission.</div>
-                    </div>
-                `;
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }, 1000);
-        }
+        };
 
         function escapeHtml(string) {
             return string.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
 
-        // Initialize radar nodes on load
+        // Start hardware scanning on app startup
         window.onload = () => {
-            renderRadarNodes();
-            document.getElementById('status').innerText = "ONLINE (3 NODES)";
+            initBluetoothRadar();
         };
     </script>
 </body>
