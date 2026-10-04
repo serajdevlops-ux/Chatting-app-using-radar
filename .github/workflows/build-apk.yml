@@ -22,7 +22,7 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Initialize Project & Build APK
+      - name: Initialize Project, Fix Conflict & Build APK
         run: |
           # Create default package.json
           npm init -y
@@ -35,6 +35,19 @@ jobs:
           
           # Add the Android native platform template
           npx cap add android
+          
+          # Force unified Kotlin standard library version to resolve duplicate classes
+          echo "
+          allprojects {
+              configurations.all {
+                  resolutionStrategy {
+                      force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+                      force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+                      force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+                  }
+              }
+          }
+          " >> android/build.gradle
           
           # Build the APK via Gradle
           cd android
