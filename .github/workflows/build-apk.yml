@@ -22,21 +22,14 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Initialize Project, Fix Conflict & Build APK
+      - name: Initialize Project, Add BLE & Build APK
         run: |
-          # Create default package.json
           npm init -y
-          
-          # Install Capacitor core, CLI, and Android platform
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-          
-          # Initialize Capacitor configuration pointing to your 'www' folder
+          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor-community/bluetooth-le
           npx cap init "RadarChat" "com.radar.chat" --web-dir www
-          
-          # Add the Android native platform template
           npx cap add android
           
-          # Force unified Kotlin standard library version to resolve duplicate classes
+          # Force unified Kotlin standard library version
           echo "
           allprojects {
               configurations.all {
@@ -49,7 +42,6 @@ jobs:
           }
           " >> android/build.gradle
           
-          # Build the APK via Gradle
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
